@@ -1,13 +1,14 @@
-import streamlit as st
-from google_auth_oauthlib.flow import Flow
-from googleapiclient.discovery import build
+import streamlit as st  # interfaz web ligera usada en la aplicación
+from google_auth_oauthlib.flow import Flow  # flujo OAuth2 para Google
+from googleapiclient.discovery import build  # constructor de servicios de Google API
 
 
-# Asegúrate de que este nombre sea IGUAL al archivo que tienes en tu carpeta
-CLIENT_SECRETS_FILE = "credentials.json" 
+# Nombre del archivo JSON con las credenciales de OAuth (debe existir en el proyecto)
+CLIENT_SECRETS_FILE = "credentials.json"
+# URI de redirección usada por Streamlit en local
 REDIRECT_URI = "http://localhost:8501"
 
-SCOPES = [
+SCOPES = [  # permisos solicitados a Google
     "https://www.googleapis.com/auth/drive.readonly",
     "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/userinfo.profile",
@@ -15,61 +16,68 @@ SCOPES = [
     "openid",
 ]
 
+
 def iniciar_login():
+    # creo el flujo OAuth a partir del archivo de secretos
     flow = Flow.from_client_secrets_file(
         CLIENT_SECRETS_FILE,
         scopes=SCOPES,
         redirect_uri=REDIRECT_URI,
     )
-    
+
+    # genero la URL de autorización que el usuario debe visitar
     auth_url, _ = flow.authorization_url(
-        access_type="offline",
+        access_type="offline",  # solicitar refresh token
         include_granted_scopes="true",
         prompt="consent",
     )
-    return auth_url
+    return auth_url  # devuelvo la URL para redirigir al usuario
+
 
 def obtener_usuario(creds):
+    # construyo el servicio oauth2 para obtener información del usuario
     service = build("oauth2", "v2", credentials=creds)
-    user_info = service.userinfo().get().execute()
+    user_info = service.userinfo().get().execute()  # solicito los datos del usuario
     return {
-        "email": user_info.get("email"),
-        "name": user_info.get("name"),
+        "email": user_info.get("email"),  # correo del usuario
+        "name": user_info.get("name"),  # nombre del usuario
     }
 
+
 def procesar_callback():
-    # 1. Si ya estamos logueados, devolvemos las credenciales guardadas
+    # 1. Si ya tenemos credenciales en sesión, devolverlas
     if "credentials" in st.session_state:
         return st.session_state["credentials"]
 
-    # 2. Si no hay código en la URL, no hacemos nada
+    # 2. Si no hay código en la URL, no hay callback que procesar
     if "code" not in st.query_params:
         return None
 
-    code = st.query_params["code"]
+    code = st.query_params["code"]  # extraigo el código de la URL
 
     try:
+        # recreo el flujo para intercambiar el código por credenciales
         flow = Flow.from_client_secrets_file(
             CLIENT_SECRETS_FILE,
             scopes=SCOPES,
             redirect_uri=REDIRECT_URI,
         )
-        
-        # 3. INTENTAMOS canjear el código (Aquí es donde fallaba antes)
+
+        # intento canjear el código por tokens (access + refresh)
         flow.fetch_token(code=code)
-        
-        # Si funciona, guardamos en sesión
+
+        # si todo fue bien, obtengo las credenciales
         creds = flow.credentials
-        st.session_state["credentials"] = creds
-        
-        # Y limpiamos la URL inmediatamente
+        st.session_state["credentials"] = creds  # las guardo en la sesión
+
+        # limpio los parámetros de la URL para evitar reintentos automáticos
         st.query_params.clear()
-        
-        return creds
+
+        return creds  # devuelvo las credenciales obtenidas
 
     except Exception as e:
-        # 4. SI FALLA (porque el código es viejo), NO crasheamos.
-        # Simplemente limpiamos la URL para que el usuario pueda intentar de nuevo.
+        # Si algo falló (p. ej. código expirado), no lanzo excepción crítica
+        # aviso al usuario y limpio la URL para permitir reintentar
         st.warning("La sesión se actualizó. Por favor intenta conectar de nuevo si es necesario.")
         st.query_params.clear()
         return None
