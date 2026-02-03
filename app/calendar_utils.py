@@ -38,3 +38,27 @@ def crear_evento_calendar(
 
     # devuelvo el enlace web al evento recién creado
     return evento_creado.get("htmlLink")
+
+
+def obtener_eventos_calendar(creds, dias=30):
+    """Obtiene los próximos eventos del calendario dentro de los próximos `dias` días."""
+    service = build("calendar", "v3", credentials=creds)
+    
+    # ahora y fecha límite
+    ahora = datetime.utcnow().isoformat() + 'Z'
+    fecha_limite = (datetime.utcnow() + timedelta(days=dias)).isoformat() + 'Z'
+    
+    try:
+        # solicito los eventos del calendario en el rango de fechas
+        eventos = service.events().list(
+            calendarId='primary',
+            timeMin=ahora,
+            timeMax=fecha_limite,
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+        
+        return eventos.get('items', [])
+    except Exception as e:
+        print(f"Error al obtener eventos: {e}")
+        return []

@@ -1,12 +1,17 @@
 import streamlit as st  # interfaz web ligera usada en la aplicación
 from google_auth_oauthlib.flow import Flow  # flujo OAuth2 para Google
 from googleapiclient.discovery import build  # constructor de servicios de Google API
+import pickle
+import os
+from pathlib import Path
 
 
 # Nombre del archivo JSON con las credenciales de OAuth (debe existir en el proyecto)
 CLIENT_SECRETS_FILE = "credentials.json"
 # URI de redirección usada por Streamlit en local
 REDIRECT_URI = "http://localhost:8501"
+# Archivo para guardar credenciales persistentes
+CREDENTIALS_FILE = ".streamlit/credentials.pkl"
 
 SCOPES = [  # permisos solicitados a Google
     "https://www.googleapis.com/auth/drive.readonly",
@@ -15,6 +20,37 @@ SCOPES = [  # permisos solicitados a Google
     "https://www.googleapis.com/auth/userinfo.email",
     "openid",
 ]
+
+
+def guardar_credenciales(creds):
+    """Guarda las credenciales en un archivo pickle para persistencia."""
+    try:
+        # Crea el directorio si no existe
+        Path(CREDENTIALS_FILE).parent.mkdir(parents=True, exist_ok=True)
+        with open(CREDENTIALS_FILE, 'wb') as f:
+            pickle.dump(creds, f)
+    except Exception as e:
+        print(f"Error al guardar credenciales: {e}")
+
+
+def cargar_credenciales():
+    """Carga las credenciales del archivo pickle si existen."""
+    try:
+        if os.path.exists(CREDENTIALS_FILE):
+            with open(CREDENTIALS_FILE, 'rb') as f:
+                return pickle.load(f)
+    except Exception as e:
+        print(f"Error al cargar credenciales: {e}")
+    return None
+
+
+def eliminar_credenciales():
+    """Elimina el archivo de credenciales guardadas."""
+    try:
+        if os.path.exists(CREDENTIALS_FILE):
+            os.remove(CREDENTIALS_FILE)
+    except Exception as e:
+        print(f"Error al eliminar credenciales: {e}")
 
 
 def iniciar_login():
@@ -69,6 +105,7 @@ def procesar_callback():
         # si todo fue bien, obtengo las credenciales
         creds = flow.credentials
         st.session_state["credentials"] = creds  # las guardo en la sesión
+        guardar_credenciales(creds)  # guardo en archivo para persistencia
 
         # limpio los parámetros de la URL para evitar reintentos automáticos
         st.query_params.clear()

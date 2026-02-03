@@ -2,9 +2,11 @@ import re  # módulo para operaciones con expresiones regulares
 from datetime import datetime, timedelta  # importo tipos de fecha y duración
 
 PALABRAS_CLAVE = [  # lista de palabras/frases relevantes a buscar en documentos
+    "encargado",  # PRIORIDAD: busca responsable/encargado
     "hasta",
     "departamento de",
     "jefe de departamento",
+    "jefe de laboratorio",
     "docente",
     "para",
     "entregar",
@@ -12,12 +14,37 @@ PALABRAS_CLAVE = [  # lista de palabras/frases relevantes a buscar en documentos
     "plazo",
     "entrega",
     "asunto"
+    
 ]
+
+
+def buscar_encargado(texto: str):
+    """Busca al encargado/responsable en el texto (prioridad máxima)."""
+    texto_lower = texto.lower()
+    
+    # Patrones para buscar encargado
+    patrones_encargado = [
+        r"encargado[^\n]*",  # encargado seguido de info
+        r"jefe[\s\w]*\([^)]*encargado[^)]*\)",  # jefe (...Encargado)
+        r"([A-Z][a-záéíóú]+[\s\w.,]*)\s+\(encargado\)",  # Nombre (Encargado)
+    ]
+    
+    for patron in patrones_encargado:
+        match = re.search(patron, texto, re.IGNORECASE)
+        if match:
+            return match.group().strip()
+    
+    return None
 
 
 def buscar_palabras_clave(texto: str):
     texto_lower = texto.lower()  # convierto todo el texto a minúsculas
     encontradas = []  # lista donde guardaré las palabras encontradas
+    
+    # Primero busco al encargado y lo agrego con prioridad
+    encargado = buscar_encargado(texto)
+    if encargado:
+        encontradas.append(f"Encargado: {encargado}")
 
     for palabra in PALABRAS_CLAVE:  # itero cada palabra clave
         if palabra in texto_lower:  # si la palabra aparece en el texto
