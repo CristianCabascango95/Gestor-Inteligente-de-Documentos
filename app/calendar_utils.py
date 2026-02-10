@@ -1,5 +1,6 @@
 from googleapiclient.discovery import build  # constructor de clientes para Google APIs
 from datetime import datetime, timedelta  # utilidades de fecha y duración
+from zoneinfo import ZoneInfo  # zona horaria estándar
 
 
 def crear_evento_calendar(
@@ -12,7 +13,9 @@ def crear_evento_calendar(
     service = build("calendar", "v3", credentials=creds)
 
     # inicio del evento: combino la fecha límite con la hora mínima del día
-    inicio = datetime.combine(fecha_limite, datetime.min.time())
+    zona = ZoneInfo("America/Guayaquil")
+    fecha_base = fecha_limite.date() if isinstance(fecha_limite, datetime) else fecha_limite
+    inicio = datetime.combine(fecha_base, datetime.min.time()).replace(tzinfo=zona)
     # duración por defecto: 1 hora
     fin = inicio + timedelta(hours=1)
 

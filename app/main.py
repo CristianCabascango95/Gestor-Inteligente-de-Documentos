@@ -8,7 +8,11 @@ from calendar_utils import crear_evento_calendar, obtener_eventos_calendar  # fu
 from analyzer import (
     buscar_palabras_clave,
     buscar_fecha,
+    buscar_fecha_limite_doc,
     calcular_fecha_limite,
+    buscar_asunto,
+    detectar_accion,
+    calcular_fecha_agenda,
 )
 
 # configuración básica de la página Streamlit
@@ -60,6 +64,7 @@ if st.session_state.get("just_logged_in"):
 
 # Aseguro que la clave `credentials` exista en la sesión (inicialmente None)
 st.session_state.setdefault("credentials", None)
+st.session_state.setdefault("eventos_creados", set())
 
 # Si no hay credenciales en sesión, intento cargarlas de archivo
 if not st.session_state.get("credentials"):
@@ -182,23 +187,30 @@ with col2:
 
                         # analizo palabras clave y fechas
                         palabras = buscar_palabras_clave(texto)
-                        fecha_detectada = buscar_fecha(texto)
+                        fecha_detectada = buscar_fecha_limite_doc(texto) or buscar_fecha(texto)
+                        asunto = buscar_asunto(texto)
+                        accion = detectar_accion(texto)
                         fecha_limite = calcular_fecha_limite(fecha_detectada)
-                        
-                        # botón para agendar el resultado en Calendar
-                        if st.button("📅 Agendar en Google Calendar", key=f"calendar_drive_{archivo['id']}"):
+                        fecha_agenda = calcular_fecha_agenda(fecha_detectada)
+
+                        evento_key = f"drive:{archivo['id']}"
+                        if evento_key not in st.session_state.eventos_creados:
                             if not st.session_state.get("credentials"):
                                 st.warning("Inicia sesión para crear eventos en Google Calendar.")
                             else:
                                 crear_evento_calendar(
                                     st.session_state.get("credentials"),
-                                    titulo=f"Tarea: {archivo['name']}",
-                                    descripcion=f"Documento analizado: {archivo['name']}\n"
-                                                f"Palabras clave: {', '.join(palabras) if palabras else 'Ninguna'}",
-                                    fecha_limite=fecha_limite,
+                                    titulo=f"{accion}: {asunto}" if asunto else f"{accion}: {archivo['name']}",
+                                    descripcion=(
+                                        f"Documento analizado: {archivo['name']}\n"
+                                        f"Asunto: {asunto if asunto else 'No detectado'}"
+                                    ),
+                                    fecha_limite=fecha_agenda,
                                 )
+                                st.session_state.eventos_creados.add(evento_key)
                                 st.success("Evento creado en tu Google Calendar")
-                                st.success("Documento analizado correctamente")
+                        
+                        # botón para agendar el resultado en Calendar
 
                         # muestro la fecha límite detectada
                         st.metric(
@@ -227,19 +239,27 @@ with col2:
                 texto = extraer_texto_pdf(pdf)  # extraigo texto del PDF local
 
                 palabras = buscar_palabras_clave(texto)
-                fecha_detectada = buscar_fecha(texto)
+                fecha_detectada = buscar_fecha_limite_doc(texto) or buscar_fecha(texto)
+                asunto = buscar_asunto(texto)
+                accion = detectar_accion(texto)
                 fecha_limite = calcular_fecha_limite(fecha_detectada)
-                if st.button("📅 Agendar en Google Calendar", key=f"calendar_local_{pdf.name}"):
+                fecha_agenda = calcular_fecha_agenda(fecha_detectada)
+
+                evento_key = f"local:{pdf.name}"
+                if evento_key not in st.session_state.eventos_creados:
                     if not st.session_state.get("credentials"):
                         st.warning("Inicia sesión para crear eventos en Google Calendar.")
                     else:
                         crear_evento_calendar(
                             st.session_state.get("credentials"),
-                            titulo=f"Tarea: {pdf.name}",
-                            descripcion=f"Documento analizado: {pdf.name}\n"
-                                        f"Palabras clave: {', '.join(palabras) if palabras else 'Ninguna'}",
-                            fecha_limite=fecha_limite,
+                            titulo=f"{accion}: {asunto}" if asunto else f"{accion}: {pdf.name}",
+                            descripcion=(
+                                f"Documento analizado: {pdf.name}\n"
+                                f"Asunto: {asunto if asunto else 'No detectado'}"
+                            ),
+                            fecha_limite=fecha_agenda,
                         )
+                        st.session_state.eventos_creados.add(evento_key)
                         st.success("Evento creado en tu Google Calendar")
                     
 

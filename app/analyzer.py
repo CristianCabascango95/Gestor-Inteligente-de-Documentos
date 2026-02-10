@@ -2,7 +2,9 @@ import re  # módulo para operaciones con expresiones regulares
 from datetime import datetime, timedelta  # importo tipos de fecha y duración
 
 PALABRAS_CLAVE = [  # lista de palabras/frases relevantes a buscar en documentos
-    "encargado",  # PRIORIDAD: busca responsable/encargado
+    "De mi consideración",
+    "Ing. Edwin Oswaldo Chasiquiza Molina, Mgtr", # PRIORIDAD: busca responsable/encargado
+    "encargado",  
     "hasta",
     "departamento de",
     "jefe de departamento",
@@ -13,7 +15,9 @@ PALABRAS_CLAVE = [  # lista de palabras/frases relevantes a buscar en documentos
     "fecha límite",
     "plazo",
     "entrega",
-    "asunto"
+    "asunto",
+    "presentar"
+    
     
 ]
 
@@ -78,6 +82,81 @@ def buscar_fecha(texto: str):
     return None  # si no se encontró ninguna fecha, devuelvo None
 
 
+def _extraer_fechas(texto: str):
+    """Extrae todas las fechas con su posicion en el texto."""
+    fechas = []
+    patrones = [
+        r"\d{1,2}[/-]\d{1,2}[/-]\d{4}",
+        r"\d{1,2}\s+de\s+[a-zA-Z]+\s+de\s+\d{4}",
+    ]
+    for patron in patrones:
+        for match in re.finditer(patron, texto.lower()):
+            try:
+                fecha = convertir_fecha(match.group())
+                fechas.append((fecha, match.start()))
+            except Exception:
+                continue
+    return fechas
+
+
+def buscar_fecha_limite_doc(texto: str):
+    """Busca la fecha limite usando palabras clave (hasta, plazo, fecha limite)."""
+    texto_lower = texto.lower()
+    fechas = _extraer_fechas(texto)
+    if not fechas:
+        return None
+
+    patrones_clave = [
+        r"hasta",
+        r"fecha\s*l[ií]mite",
+        r"plazo",
+        r"entregar",
+        r"entrega",
+        r"a\s+mas\s+tardar",
+        r"antes\s+del",
+    ]
+
+    indices_clave = []
+    for patron in patrones_clave:
+        for match in re.finditer(patron, texto_lower):
+            indices_clave.append(match.start())
+
+    if indices_clave:
+        # Busco la primera fecha despues de una palabra clave cercana.
+        mejor = None
+        mejor_dist = None
+        for fecha, idx in fechas:
+            for idx_clave in indices_clave:
+                if idx >= idx_clave:
+                    dist = idx - idx_clave
+                    if mejor is None or dist < mejor_dist:
+                        mejor = fecha
+                        mejor_dist = dist
+        if mejor:
+            return mejor
+
+    # Si no hay palabras clave, uso la fecha mas lejana (posible fecha limite)
+    return max(f for f, _ in fechas)
+
+
+def buscar_asunto(texto: str):
+    """Extrae el asunto desde una linea tipo 'Asunto: ...' si existe."""
+    match = re.search(r"^\s*asunto\s*[:\-]\s*(.+)$", texto, re.IGNORECASE | re.MULTILINE)
+    if match:
+        return match.group(1).strip()
+    return None
+
+
+def detectar_accion(texto: str):
+    """Detecta la accion principal para titular el evento."""
+    texto_lower = texto.lower()
+    if "entregar" in texto_lower or "entrega" in texto_lower:
+        return "Entregar"
+    if "presentar" in texto_lower:
+        return "Presentar"
+    return "Tarea"
+
+
 def convertir_fecha(fecha_str: str):
     fecha_str = fecha_str.strip()  # elimino espacios al inicio/final
 
@@ -107,3 +186,10 @@ def calcular_fecha_limite(fecha_detectada):
         return fecha_detectada
 
     return datetime.now() + timedelta(days=2)  # si no, uso hoy + 2 días como predeterminado
+
+
+def calcular_fecha_agenda(fecha_detectada):
+    """Calcula la fecha de agenda (2 dias antes de la fecha limite)."""
+    if fecha_detectada:
+        return fecha_detectada - timedelta(days=2)
+    return datetime.now() + timedelta(days=2)
